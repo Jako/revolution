@@ -219,6 +219,8 @@ class GetList extends GetListProcessor
                 } else {
                     $provider = $package->getOne('Provider');
                     if ($provider) {
+                        // Use the short timeouts of the automatic update check
+                        $provider->useUpdateCheckTimeouts();
                         $this->providerCache[$provider->get('id')] = $provider;
                     }
                 }

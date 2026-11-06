@@ -2,10 +2,12 @@
 
 namespace MODX\Revolution\Transport;
 
+use GuzzleHttp\ClientInterface as GuzzleClientInterface;
 use MODX\Revolution\modX;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use SimpleXMLElement;
 use xPDO\Om\xPDOSimpleObject;
@@ -40,6 +42,10 @@ class modTransportProvider extends xPDOSimpleObject
      * @var RequestFactoryInterface
      */
     private $requestFactory;
+    /**
+     * @var array Guzzle request options, e.g. timeouts, used for the requests to the provider
+     */
+    private $requestOptions = [];
 
     /**
      * Return a list repositories from this Provider.
@@ -518,7 +524,7 @@ class modTransportProvider extends xPDOSimpleObject
 
         $response = false;
         try {
-            $response = $client->sendRequest($request);
+            $response = self::sendRequestWithOptions($client, $request, $this->requestOptions);
         } catch (ClientExceptionInterface $e) {
             $this->xpdo->log(modX::LOG_LEVEL_ERROR, get_class($e) . " sending {$method} {$path} for provider {$this->get('name')}: {$e->getMessage()}", '', '', $e->getFile(), $e->getLine());
         }
@@ -533,12 +539,55 @@ class modTransportProvider extends xPDOSimpleObject
      */
     public function getClient(): ClientInterface
     {
-        if ($this->client) {
-            return $this->client;
+        if (!$this->requestFactory) {
+            $this->requestFactory = $this->xpdo->services->get(RequestFactoryInterface::class);
         }
-        $this->client = $this->xpdo->services->get(ClientInterface::class);
-        $this->requestFactory = $this->xpdo->services->get(RequestFactoryInterface::class);
+        if (!$this->client) {
+            $this->client = $this->xpdo->services->get(ClientInterface::class);
+        }
         return $this->client;
+    }
+
+    /**
+     * Use the short timeouts of the automatic update checks for the requests to the provider.
+     */
+    public function useUpdateCheckTimeouts(): void
+    {
+        $this->requestOptions = self::getUpdateCheckRequestOptions($this->xpdo);
+    }
+
+    /**
+     * Get the request options for the automatic update checks, which run while the manager pages are rendered.
+     * Short timeouts make sure an unreachable provider can't block the page load for a long time.
+     *
+     * @param modX $modx
+     * @return array
+     */
+    public static function getUpdateCheckRequestOptions(modX $modx): array
+    {
+        // A value of 0 disables the respective timeout
+        return [
+            'connect_timeout' => max(0, (float)$modx->getOption('auto_check_pkg_updates_connect_timeout', null, 3)),
+            'timeout' => max(0, (float)$modx->getOption('auto_check_pkg_updates_timeout', null, 10)),
+        ];
+    }
+
+    /**
+     * Send a request with the shared client. PSR-18 does not support request options, so they are only applied when
+     * the client is a Guzzle client; other clients send the request without them.
+     *
+     * @param ClientInterface $client
+     * @param RequestInterface $request
+     * @param array $options Guzzle request options
+     * @return ResponseInterface
+     * @throws ClientExceptionInterface
+     */
+    public static function sendRequestWithOptions(ClientInterface $client, RequestInterface $request, array $options = []): ResponseInterface
+    {
+        if (!empty($options) && $client instanceof GuzzleClientInterface) {
+            return $client->send($request, $options);
+        }
+        return $client->sendRequest($request);
     }
 
     /**

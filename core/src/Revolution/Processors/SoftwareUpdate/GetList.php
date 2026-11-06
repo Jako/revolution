@@ -14,6 +14,7 @@ namespace MODX\Revolution\Processors\SoftwareUpdate;
 use MODX\Revolution\Processors\SoftwareUpdate\Base;
 use MODX\Revolution\Processors\Workspace\Packages\GetList as PackagesGetList;
 use MODX\Revolution\Transport\modTransportPackage;
+use MODX\Revolution\Transport\modTransportProvider;
 use Psr\Http\Client\ClientExceptionInterface;
 use MODX\Revolution\modX;
 
@@ -75,7 +76,12 @@ class GetList extends Base
             ->withHeader('Accept', 'application/json')
             ->withHeader('Content-Type', 'application/json');
         try {
-            $response = $this->apiClient->sendRequest($request);
+            // Use the short timeouts of the automatic update check
+            $response = modTransportProvider::sendRequestWithOptions(
+                $this->apiClient,
+                $request,
+                modTransportProvider::getUpdateCheckRequestOptions($this->modx)
+            );
         } catch (ClientExceptionInterface $e) {
             $this->modx->log(modX::LOG_LEVEL_ERROR, 'ClientExceptionInterface Err: ' . $e->getMessage());
             return $this->failure($e->getMessage());
