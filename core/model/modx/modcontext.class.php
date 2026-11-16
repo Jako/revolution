@@ -101,6 +101,10 @@ class modContext extends modAccessibleObject {
                 )))) {
                     $context = $this->xpdo->cacheManager->generateContext($this->get('key'), $options);
                 }
+                // Regenerate the context if the cached data has no usable config (e.g. a truncated cache file)
+                if (!empty($context) && (!isset($context['config']) || !is_array($context['config']))) {
+                    $context = $this->xpdo->cacheManager->generateContext($this->get('key'), $options);
+                }
                 if (!empty($context)) {
                     foreach ($context as $var => $val) {
                         if ($var === 'policies') {
