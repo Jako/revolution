@@ -150,6 +150,11 @@ class modContext extends modAccessibleObject
                     /** @disregard P1013 Intelephense can not find this modCacheManager instance method, but it does exist and is available here */
                     $context = $this->xpdo->cacheManager->generateContext($this->get('key'), $options);
                 }
+                // Regenerate the context if the cached data has no usable config (e.g. a truncated cache file)
+                if (!empty($context) && !is_array($context['config'] ?? null)) {
+                    /** @disregard P1013 Intelephense can not find this modCacheManager instance method, but it does exist and is available here */
+                    $context = $this->xpdo->cacheManager->generateContext($this->get('key'), $options);
+                }
                 if (!empty($context)) {
                     foreach ($context as $var => $val) {
                         if ($var === 'policies') {
